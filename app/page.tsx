@@ -7,7 +7,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Separator } from "@/components/ui/separator"
 import { ArrowUp, ChefHat, BookOpen, ShoppingCart, Play, Search, MessageSquare, Loader2, AlertCircle } from "lucide-react"
-import { classifyIntent, processShoppingMessage, processVideoMessage, checkServiceHealth, Ingredient } from "@/lib/api"
+import { sendMessageToAgent, checkServiceHealth } from "@/lib/api"
+
 
 interface ChatMessage {
   type: "user" | "bot"
@@ -32,26 +33,19 @@ export default function CookingAgent() {
     shopping: false,
     video: false
   })
+  const [isAgentHealthy, setIsAgentHealthy] = useState(false)
+  const [currentRecipeName, setCurrentRecipeName] = useState<string>("")
+
 
   // 서비스 상태 확인
   useEffect(() => {
-    const checkHealth = async () => {
-      try {
-        const health = await checkServiceHealth()
-        setServiceHealth(health)
-      } catch (error) {
-        console.error('Service health check failed:', error)
-      }
-    }
-
-    // 초기 한 번만 확인
-    checkHealth()
+    handleRefreshHealth();
   }, [])
 
   const handleRefreshHealth = async () => {
     try {
-      const health = await checkServiceHealth()
-      setServiceHealth(health)
+      const health = await checkServiceHealth();
+    setIsAgentHealthy(health.agent);
     } catch (error) {
       console.error('Service health check failed:', error)
     }
@@ -63,7 +57,6 @@ export default function CookingAgent() {
       setMessage("")
       setIsLoading(true)
 
-      // 사용자 메시지 추가
       const userChatMessage: ChatMessage = {
         type: "user",
         content: userMessage,
@@ -72,60 +65,81 @@ export default function CookingAgent() {
       setChatHistory(prev => [...prev, userChatMessage])
 
       try {
-        // 1. 의도 분류
-        const intentResult = await classifyIntent(userMessage)
-        console.log('Intent classification result:', intentResult)
+        const result = await sendMessageToAgent(userMessage)
+        console.log('----indent 결과 ----- Intent classification result:', result)
 
-        let botResponse = ""
-        let ingredients: (string | Ingredient)[] = []
-        let recipe: string[] = []
+        const botResponse = result.response;
+        console.log('----에이전트에게 보낸 메시지 응답 결과 ----- Bot response:', botResponse)
 
-        // 2. 의도에 따른 처리
-        if (intentResult.intent === "VIDEO") {
-          // 비디오 처리 (로딩 메시지 추가)
-          const loadingMessage: ChatMessage = {
-            type: "bot",
-            content: "🎥 유튜브 영상을 분석하고 있습니다... 영상 길이에 따라 1-3분 정도 소요될 수 있습니다.",
-            timestamp: new Date()
-          }
-          setChatHistory(prev => [...prev, loadingMessage])
-          
-          const videoResult = await processVideoMessage(userMessage)
-          
-          // 로딩 메시지 제거하고 실제 결과로 교체
-          setChatHistory(prev => prev.slice(0, -1))
-          
-          botResponse = videoResult.answer
-          ingredients = videoResult.ingredients
-          recipe = videoResult.recipe
-        } else {
-          // 텍스트 처리 (요리 관련)
-          const shoppingResult = await processShoppingMessage(userMessage)
-          botResponse = shoppingResult.answer
-          ingredients = shoppingResult.ingredients
-          recipe = shoppingResult.recipe
-        }
+        // // 요리 이름 추출 (예: "네, 월남쌈 만드는 방법을 알려드릴게요!")
+        // const nameMatch = botResponse.match(/(?:네,|알겠습니다,)?\s*([^\s]+)\s*만드는 방법/)
+        // if (nameMatch) {
+        //   setCurrentRecipeName(nameMatch[1])
+        // } else {
+        //   setCurrentRecipeName("")
+        // }
+        // console.log('----요리 이름 ----- Current recipe name:', currentRecipeName)
+
+        // // [추가] 응답에서 재료와 만드는 법 파싱
+        // // 재료 추출
+        // const ingredientMatch = botResponse.match(/\*\*재료:\*\*\s*([\s\S]*?)\n\n\*\*/)
+        // let ingredients: string[] = []
+        // if (ingredientMatch) {
+        //   ingredients = ingredientMatch[1]
+        //     .split('\n')
+        //     .map(line => line.replace(/^\* /, '').trim())
+        //     .filter(line => line.length > 0)
+        // }
+
+        // // 만드는 법(조리법) 추출
+        // const recipeMatch = botResponse.match(/\*\*만드는 법:\*\*\s*([\s\S]*?)(?:\n\n|$)/)
+        // let recipe: string[] = []
+        // if (recipeMatch) {
+        //   recipe = recipeMatch[1]
+        //     .split('\n')
+        //     .map(line => line.replace(/^\d+\.\s*/, '').trim())
+        //     .filter(line => line.length > 0)
+        // }
+
+
+          let extractedRecipeName = "";
+          let ingredients: string[] = [];
+          let recipe: string[] = [];
+
+          // botResponse가 JSON 객체인지 확인
+            if (typeof botResponse === 'object' && botResponse !== null) {
+              // JSON 객체에 요리 정보가 있을 경우
+              extractedRecipeName = botResponse.food_name || "";
+              ingredients = Array.isArray(botResponse.ingredients) ? botResponse.ingredients : [];
+              recipe = Array.isArray(botResponse.recipe) ? botResponse.recipe : [];
+            } else {
+              // JSON 객체지만 레시피 정보가 없을 경우 (다른 에러 등)
+              // botResponse를 그대로 사용하거나 에러 처리
+            }
+
+
+        // 필요한 데이터를 문자열로 변환
+        const botResponseString = `
+          ${botResponse.answer || ""}
+          📋 재료: ${botResponse.ingredients?.join(", ") || "없음"}
+          👨‍🍳 조리 단계: ${botResponse.recipe?.join("\n") || "없음"}
+        `;
+
 
         // 봇 응답 추가
         const botChatMessage: ChatMessage = {
           type: "bot",
-          content: botResponse,
+          content: botResponseString.trim(),
           timestamp: new Date()
         }
         setChatHistory(prev => [...prev, botChatMessage])
 
-        // 재료와 레시피 업데이트
-        if (ingredients.length > 0) {
-          setCurrentIngredients(ingredients)
-        }
-        if (recipe.length > 0) {
-          setCurrentRecipe(recipe)
-        }
+        setCurrentRecipeName(extractedRecipeName);
+        setCurrentIngredients(botResponse.ingredients)
+        setCurrentRecipe(botResponse.recipe)
 
       } catch (error) {
         console.error('Error processing message:', error)
-        
-        // 에러 메시지 추가
         const errorMessage: ChatMessage = {
           type: "bot",
           content: "죄송합니다. 서비스에 일시적인 문제가 발생했습니다. 잠시 후 다시 시도해주세요.",
@@ -173,10 +187,10 @@ export default function CookingAgent() {
                 </Button>
               </div>
               <div className="space-y-2">
-                <div className="flex items-center justify-between">
+                {/* <div className="flex items-center justify-between">
                   <span className="text-sm text-gray-600">Intent Service</span>
                   <div className={`w-2 h-2 rounded-full ${serviceHealth.intent ? 'bg-green-500' : 'bg-red-500'}`}></div>
-                </div>
+                </div> */}
                 <div className="flex items-center justify-between">
                   <span className="text-sm text-gray-600">Shopping Service</span>
                   <div className={`w-2 h-2 rounded-full ${serviceHealth.shopping ? 'bg-green-500' : 'bg-red-500'}`}></div>
@@ -184,6 +198,10 @@ export default function CookingAgent() {
                 <div className="flex items-center justify-between">
                   <span className="text-sm text-gray-600">Video Service</span>
                   <div className={`w-2 h-2 rounded-full ${serviceHealth.video ? 'bg-green-500' : 'bg-red-500'}`}></div>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-gray-600">Planning Agent</span>
+                  <div className={`w-2 h-2 rounded-full ${isAgentHealthy ? 'bg-green-500' : 'bg-red-500'}`}></div>
                 </div>
               </div>
             </div>
@@ -217,13 +235,13 @@ export default function CookingAgent() {
             <div>
               <h3 className="font-semibold text-orange-900 mb-3">레시피 기록</h3>
               <div className="space-y-2">
-                {chatHistory.length === 0 ? (
+                {chatHistory?.length === 0 ? (
                   <div className="text-sm text-gray-500 text-center py-4">
                     대화 기록이 없습니다
                   </div>
                 ) : (
                   <div className="text-sm text-gray-600">
-                    {chatHistory.filter(msg => msg.type === "user").length}개의 질문
+                    {chatHistory?.filter(msg => msg.type === "user").length}개의 질문
                   </div>
                 )}
               </div>
@@ -233,13 +251,13 @@ export default function CookingAgent() {
             <div>
               <h3 className="font-semibold text-orange-900 mb-3">채팅 기록</h3>
               <div className="space-y-2">
-                {chatHistory.length === 0 ? (
+                {chatHistory?.length === 0 ? (
                   <div className="text-sm text-gray-500 text-center py-4">
                     대화 기록이 없습니다
                   </div>
                 ) : (
                   <div className="text-sm text-gray-600">
-                    {chatHistory.length}개의 메시지
+                    {chatHistory?.length}개의 메시지
                   </div>
                 )}
               </div>
@@ -252,7 +270,7 @@ export default function CookingAgent() {
           {/* 채팅 영역 */}
           <div className="flex-1 p-4">
             <ScrollArea className="h-full">
-              {chatHistory.length === 0 ? (
+              {chatHistory?.length === 0 ? (
                 <div className="h-full flex items-center justify-center">
                   <div className="text-center text-orange-400">
                     <ChefHat className="w-16 h-16 mx-auto mb-4 opacity-50" />
@@ -283,7 +301,7 @@ export default function CookingAgent() {
                     <div className="bg-gradient-to-r from-gray-50 to-orange-50 border border-gray-200 mr-auto max-w-[80%] p-4 rounded-lg">
                       <div className="flex items-center space-x-2">
                         <Loader2 className="w-4 h-4 animate-spin" />
-                        <span className="text-sm text-gray-600">AI가 응답을 생성하고 있습니다...</span>
+                        <span className="text-sm text-gray-600">AI가 답변을 생각하고 있습니다...</span>
                       </div>
                     </div>
                   )}
@@ -327,25 +345,32 @@ export default function CookingAgent() {
               <CardTitle className="text-lg">재료 목록</CardTitle>
             </CardHeader>
             <CardContent className="flex flex-col h-full">
-              {currentIngredients.length > 0 ? (
+              {/* 요리 이름 추가 */}
+              {/* {currentIngredients.length > 0 ? (
                 <div className="flex-1">
                   <div className="space-y-2 max-h-40 overflow-y-auto">
                     {currentIngredients.map((ingredient, index) => (
                       <div
-                        key={index}
-                        className="bg-gradient-to-br from-orange-100 to-red-100 rounded-lg p-2 border border-orange-200 text-sm"
+                      key={index}
+                      className="bg-gradient-to-br from-orange-100 to-red-100 rounded-lg p-2 border border-orange-200 text-sm"
                       >
                         {typeof ingredient === 'string' 
                           ? ingredient 
                           : typeof ingredient === 'object' && ingredient !== null && 'name' in ingredient
-                            ? `${(ingredient as Ingredient).name} ${(ingredient as Ingredient).amount} ${(ingredient as Ingredient).unit || ''}`.trim()
-                            : String(ingredient)
+                          ? `${(ingredient as Ingredient).name} ${(ingredient as Ingredient).amount} ${(ingredient as Ingredient).unit || ''}`.trim()
+                          : String(ingredient)
                         }
                       </div>
                     ))}
                   </div>
                 </div>
-              ) : (
+              ) : ( */}
+                
+                {currentRecipeName ? (
+                  <div className="mb-2 text-lg font-bold text-orange-700 text-center">
+                    {currentRecipeName}
+                  </div>
+                ) : (
                 <div className="bg-gradient-to-br from-orange-100 to-red-100 rounded-lg p-4 mb-4 flex-1 flex items-center justify-center border border-orange-200">
                   <div className="flex items-center text-gray-600">
                     <ChefHat className="w-4 h-4 mr-2" />
@@ -358,7 +383,7 @@ export default function CookingAgent() {
                   variant="outline"
                   size="sm"
                   className="border-orange-300 text-orange-700 hover:bg-orange-50 flex-1 bg-transparent"
-                  disabled={currentRecipe.length === 0}
+                  disabled={!Array.isArray(currentRecipe) || currentRecipe.length === 0}
                 >
                   조리법 보러가기
                 </Button>
@@ -380,7 +405,7 @@ export default function CookingAgent() {
               <CardTitle className="text-lg">조리법</CardTitle>
             </CardHeader>
             <CardContent className="flex flex-col h-full">
-              {currentRecipe.length > 0 ? (
+              {currentRecipe?.length > 0 ? (
                 <div className="flex-1 overflow-y-auto">
                   <div className="space-y-2">
                     {currentRecipe.map((step, index) => (
