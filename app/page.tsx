@@ -8,7 +8,6 @@ import { ScrollArea } from "@/components/ui/scroll-area"
 import { Separator } from "@/components/ui/separator"
 import { ArrowUp, ChefHat, BookOpen, ShoppingCart, Play, Search, MessageSquare, Loader2, AlertCircle } from "lucide-react"
 import { sendMessageToAgent, checkServiceHealth } from "@/lib/api"
-      
 
 interface ChatMessage {
   type: "user" | "bot"
