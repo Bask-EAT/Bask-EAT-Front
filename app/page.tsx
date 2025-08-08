@@ -19,21 +19,31 @@ interface ServiceHealth {
   intent: boolean
   shopping: boolean
   video: boolean
+  agent: boolean
+}
+
+interface Recipe {
+  food_name: string
+  ingredients: string[]
+  recipe: string[]
+  answer?: string // 'answer' 필드가 있을 수 있음
 }
 
 export default function CookingAgent() {
   const [message, setMessage] = useState("")
   const [chatHistory, setChatHistory] = useState<ChatMessage[]>([])
   const [isLoading, setIsLoading] = useState(false)
-  const [currentIngredients, setCurrentIngredients] = useState<(string | Ingredient)[]>([])
-  const [currentRecipe, setCurrentRecipe] = useState<string[]>([])
+  // const [currentIngredients, setCurrentIngredients] = useState<(string | Ingredient)[]>([])
+  // const [currentRecipe, setCurrentRecipe] = useState<string[]>([])
   const [serviceHealth, setServiceHealth] = useState<ServiceHealth>({
     intent: false,
     shopping: false,
-    video: false
+    video: false,
+    agent : false
   })
   const [isAgentHealthy, setIsAgentHealthy] = useState(false)
-  const [currentRecipeName, setCurrentRecipeName] = useState<string>("")
+  // const [currentRecipeName, setCurrentRecipeName] = useState<string>("")
+  const [recipes, setRecipes] = useState<Recipe[]>([])
 
 
   // 서비스 상태 확인
@@ -44,9 +54,10 @@ export default function CookingAgent() {
   const handleRefreshHealth = async () => {
     try {
       const health = await checkServiceHealth();
-    setIsAgentHealthy(health.agent);
+      setIsAgentHealthy(health.agent);
     } catch (error) {
       console.error('Service health check failed:', error)
+      setServiceHealth({ intent: false, shopping: false, video: false, agent: false });
     }
   }
 
@@ -65,86 +76,30 @@ export default function CookingAgent() {
 
       try {
         const result = await sendMessageToAgent(userMessage)
-        console.log('----indent 결과 ----- Intent classification result:', result)
+        // console.log('----indent 결과 ----- Intent classification result:', result)
 
         const botResponse = result.response;
         console.log('----에이전트에게 보낸 메시지 응답 결과 ----- Bot response:', botResponse)
 
-        // // 요리 이름 추출 (예: "네, 월남쌈 만드는 방법을 알려드릴게요!")
-        // const nameMatch = botResponse.match(/(?:네,|알겠습니다,)?\s*([^\s]+)\s*만드는 방법/)
-        // if (nameMatch) {
-        //   setCurrentRecipeName(nameMatch[1])
-        // } else {
-        //   setCurrentRecipeName("")
-        // }
-        // console.log('----요리 이름 ----- Current recipe name:', currentRecipeName)
-
-        // // [추가] 응답에서 재료와 만드는 법 파싱
-        // // 재료 추출
-        // const ingredientMatch = botResponse.match(/\*\*재료:\*\*\s*([\s\S]*?)\n\n\*\*/)
-        // let ingredients: string[] = []
-        // if (ingredientMatch) {
-        //   ingredients = ingredientMatch[1]
-        //     .split('\n')
-        //     .map(line => line.replace(/^\* /, '').trim())
-        //     .filter(line => line.length > 0)
-        // }
-
-        // // 만드는 법(조리법) 추출
-        // const recipeMatch = botResponse.match(/\*\*만드는 법:\*\*\s*([\s\S]*?)(?:\n\n|$)/)
-        // let recipe: string[] = []
-        // if (recipeMatch) {
-        //   recipe = recipeMatch[1]
-        //     .split('\n')
-        //     .map(line => line.replace(/^\d+\.\s*/, '').trim())
-        //     .filter(line => line.length > 0)
-        // }
-
-
-          let extractedRecipeName = "";
-          let ingredients: string[] = [];
-          let recipe: string[] = [];
-
-          // botResponse가 JSON 객체인지 확인
-            if (typeof botResponse === 'object' && botResponse !== null) {
-              // JSON 객체에 요리 정보가 있을 경우
-              extractedRecipeName = botResponse.food_name || "";
-              ingredients = Array.isArray(botResponse.ingredients) ? botResponse.ingredients : [];
-              recipe = Array.isArray(botResponse.recipe) ? botResponse.recipe : [];
-            } else {
-              // JSON 객체지만 레시피 정보가 없을 경우 (다른 에러 등)
-              // botResponse를 그대로 사용하거나 에러 처리
-            }
-
-
-        // 필요한 데이터를 문자열로 변환
-        const botResponseString = `
-          ${botResponse.answer || ""}
-          📋 재료: ${botResponse.ingredients?.join(", ") || "없음"}
-          👨‍🍳 조리 단계: ${botResponse.recipe?.join("\n") || "없음"}
-        `;
-
-
         // 봇 응답 추가
         const botChatMessage: ChatMessage = {
           type: "bot",
-          content: botResponseString.trim(),
+          content: botResponse.answer || "레시피 정보를 확인해주세요.",
           timestamp: new Date()
         }
         setChatHistory(prev => [...prev, botChatMessage])
 
-        setCurrentRecipeName(extractedRecipeName);
-        setCurrentIngredients(botResponse.ingredients)
-        setCurrentRecipe(botResponse.recipe)
+        // recipes 상태를 봇이 전달해준 recipes 배열로 업데이트
+        // botResponse.recipes가 배열이 아니거나 없으면 빈 배열로 처리하여 에러 방지
+        setRecipes(Array.isArray(botResponse.recipes) ? botResponse.recipes : []);
 
-      } catch (error) {
-        console.error('Error processing message:', error)
-        const errorMessage: ChatMessage = {
+      } catch (error : any) {
+        console.error('Error processing message:', error.message || error);
+        setChatHistory(prev => [...prev, {
           type: "bot",
-          content: "죄송합니다. 서비스에 일시적인 문제가 발생했습니다. 잠시 후 다시 시도해주세요.",
+          content: "죄송합니다. 서버에서 응답을 처리하지 못했습니다.",
           timestamp: new Date()
-        }
-        setChatHistory(prev => [...prev, errorMessage])
+        }])
       } finally {
         setIsLoading(false)
       }
@@ -160,8 +115,9 @@ export default function CookingAgent() {
 
   const handleNewChat = () => {
     setChatHistory([])
-    setCurrentIngredients([])
-    setCurrentRecipe([])
+    // setCurrentIngredients([])
+    // setCurrentRecipe([])
+    setRecipes([])
   }
 
   return (
@@ -336,98 +292,59 @@ export default function CookingAgent() {
           </div>
         </div>
 
-        {/* 오른쪽 사이드바 */}
-        <div className="col-span-3 flex flex-col h-full">
-          {/* 재료 목록 - 상단 절반 */}
-          <Card className="bg-white/90 backdrop-blur-sm shadow-lg border border-orange-100 rounded-xl flex-1 mb-2">
-            <CardHeader className="pb-3">
-              <CardTitle className="text-lg">재료 목록</CardTitle>
-            </CardHeader>
-            <CardContent className="flex flex-col h-full">
-              {/* 요리 이름 추가 */}
-              {/* {currentIngredients.length > 0 ? (
-                <div className="flex-1">
-                  <div className="space-y-2 max-h-40 overflow-y-auto">
-                    {currentIngredients.map((ingredient, index) => (
-                      <div
-                      key={index}
-                      className="bg-gradient-to-br from-orange-100 to-red-100 rounded-lg p-2 border border-orange-200 text-sm"
-                      >
-                        {typeof ingredient === 'string' 
-                          ? ingredient 
-                          : typeof ingredient === 'object' && ingredient !== null && 'name' in ingredient
-                          ? `${(ingredient as Ingredient).name} ${(ingredient as Ingredient).amount} ${(ingredient as Ingredient).unit || ''}`.trim()
-                          : String(ingredient)
-                        }
-                      </div>
-                    ))}
-                  </div>
+        {/* 오른쪽 사이드바 (수정됨) */}
+        <div className="col-span-3 h-full">
+            <ScrollArea className="h-full pr-4">
+                <div className="flex flex-col gap-6">
+                    {recipes.length > 0 ? (
+                        recipes.map((recipe, index) => (
+                            <Card key={index} className="bg-white/90 backdrop-blur-sm shadow-lg border border-orange-100 rounded-xl">
+                                <CardHeader>
+                                    <CardTitle className="text-xl text-orange-800">{recipe.food_name}</CardTitle>
+                                </CardHeader>
+                                <CardContent className="space-y-4">
+                                    <div>
+                                        <h4 className="font-semibold text-md mb-2 text-orange-700 flex items-center">
+                                            <ShoppingCart className="w-4 h-4 mr-2" />재료 목록
+                                        </h4>
+                                        <div className="space-y-2">
+                                            {recipe.ingredients.map((ingredient, i) => (
+                                                <div key={i} className="bg-gradient-to-br from-orange-50 to-red-50 rounded-lg p-2 border border-orange-200 text-sm">
+                                                    {ingredient}
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                    <Separator />
+                                    <div>
+                                        <h4 className="font-semibold text-md mb-2 text-orange-700 flex items-center">
+                                            <BookOpen className="w-4 h-4 mr-2" />조리법
+                                        </h4>
+                                        <div className="space-y-2">
+                                            {recipe.recipe.map((step, i) => (
+                                                <div key={i} className="bg-gradient-to-br from-red-50 to-orange-50 rounded-lg p-3 border border-red-200 text-sm leading-relaxed">
+                                                    <span className="font-bold text-orange-700">{i + 1}. </span>
+                                                    {step.replace(/^\d+\.\s*/, '')}
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                </CardContent>
+                            </Card>
+                        ))
+                    ) : (
+                        <div className="h-full flex items-center justify-center">
+                            <Card className="w-full bg-white/90 backdrop-blur-sm shadow-lg border border-orange-100 rounded-xl p-8">
+                                <div className="text-center text-gray-500">
+                                    <ChefHat className="w-12 h-12 mx-auto mb-4 opacity-50" />
+                                    <p className="text-lg font-semibold">레시피 정보</p>
+                                    <p className="text-sm mt-2">요리를 검색하면 재료와 조리법이 여기에 표시됩니다.</p>
+                                </div>
+                            </Card>
+                        </div>
+                    )}
                 </div>
-              ) : ( */}
-                
-                {currentRecipeName ? (
-                  <div className="mb-2 text-lg font-bold text-orange-700 text-center">
-                    {currentRecipeName}
-                  </div>
-                ) : (
-                <div className="bg-gradient-to-br from-orange-100 to-red-100 rounded-lg p-4 mb-4 flex-1 flex items-center justify-center border border-orange-200">
-                  <div className="flex items-center text-gray-600">
-                    <ChefHat className="w-4 h-4 mr-2" />
-                    재료 목록이 여기에 표시됩니다
-                  </div>
-                </div>
-              )}
-              <div className="flex gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="border-orange-300 text-orange-700 hover:bg-orange-50 flex-1 bg-transparent"
-                  disabled={!Array.isArray(currentRecipe) || currentRecipe.length === 0}
-                >
-                  조리법 보러가기
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="border-orange-300 text-orange-700 hover:bg-orange-50 flex-1 bg-transparent"
-                >
-                  <ShoppingCart className="w-4 h-4 mr-1" />
-                  장바구니 보러가기
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* 조리법 - 하단 절반 */}
-          <Card className="bg-white/90 backdrop-blur-sm shadow-lg border border-orange-100 rounded-xl flex-1 mt-2">
-            <CardHeader className="pb-3">
-              <CardTitle className="text-lg">조리법</CardTitle>
-            </CardHeader>
-            <CardContent className="flex flex-col h-full">
-              {currentRecipe?.length > 0 ? (
-                <div className="flex-1 overflow-y-auto">
-                  <div className="space-y-2">
-                    {currentRecipe.map((step, index) => (
-                      <div
-                        key={index}
-                        className="bg-gradient-to-br from-red-100 to-orange-100 rounded-lg p-3 border border-red-200 text-sm"
-                      >
-                        <span className="font-semibold text-orange-700">{index + 1}. </span>
-                        {step}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              ) : (
-                <div className="flex-1 flex items-center justify-center">
-                  <div className="text-center text-gray-500">
-                    <BookOpen className="w-8 h-8 mx-auto mb-2 opacity-50" />
-                    <p className="text-sm">조리법이 여기에 표시됩니다</p>
-                  </div>
-                </div>
-              )}
-            </CardContent>
-          </Card>
+            </ScrollArea>
         </div>
       </div>
     </div>

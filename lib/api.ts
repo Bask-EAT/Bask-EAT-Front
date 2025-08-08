@@ -129,8 +129,10 @@ export async function sendMessageToAgent(message: string): Promise<AgentResponse
     });
 
     if (!response.ok) {
-      const errorData = await response.json();
-      throw new Error(errorData.detail || `Agent service error: ${response.status}`);
+      // const errorData = await response.json();
+      // throw new Error(errorData.detail || `Agent service error: ${response.status}`);
+      const errorText = await response.text(); // JSON이 아닐 수 있음
+      throw new Error(`Agent service error: ${errorText}`);
     }
 
     return await response.json();
