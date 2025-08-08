@@ -4,9 +4,8 @@ import { GeistMono } from 'geist/font/mono'
 import './globals.css'
 
 export const metadata: Metadata = {
-  title: 'v0 App',
-  description: 'Created with v0',
-  generator: 'v0.dev',
+  title: 'Bask EAT - 요리 AI 어시스턴트',
+  description: '요리 전문 AI와 함께하는 스마트한 요리 경험',
 }
 
 export default function RootLayout({
@@ -15,17 +14,8 @@ export default function RootLayout({
   children: React.ReactNode
 }>) {
   return (
-    <html lang="en">
-      <head>
-        <style>{`
-html {
-  font-family: ${GeistSans.style.fontFamily};
-  --font-sans: ${GeistSans.variable};
-  --font-mono: ${GeistMono.variable};
-}
-        `}</style>
-      </head>
-      <body>{children}</body>
+    <html lang="ko" className={`${GeistSans.variable} ${GeistMono.variable}`}>
+      <body className={`${GeistSans.className} antialiased`}>{children}</body>
     </html>
   )
 }
