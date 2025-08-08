@@ -2,17 +2,21 @@
 const nextConfig = {
   async rewrites() {
     return [
+      // {
+      //   source: '/api/intent/:path*',
+      //   destination: 'http://localhost:8001/:path*',
+      // },
+      // {
+      //   source: '/api/shopping/:path*',
+      //   destination: 'http://localhost:8002/:path*',
+      // },
+      // {
+      //   source: '/api/video/:path*',
+      //   destination: 'http://localhost:8003/:path*',
+      // },
       {
-        source: '/api/intent/:path*',
+        source: '/api/agent/:path*',
         destination: 'http://localhost:8001/:path*',
-      },
-      {
-        source: '/api/shopping/:path*',
-        destination: 'http://localhost:8002/:path*',
-      },
-      {
-        source: '/api/video/:path*',
-        destination: 'http://localhost:8003/:path*',
       },
     ]
   },
