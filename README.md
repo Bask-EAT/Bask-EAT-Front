@@ -19,7 +19,7 @@
 
 ### 백엔드 서비스들
 - **Intent Service (8001)**: 의도 분류 및 유튜브 링크 감지
-- **ShoppingAgent Service (8002)**: 요리 관련 처리 (레시피, 재료, 팁)
+- **TextAgent Service (8002)**: 요리 관련 처리 (레시피, 재료, 팁)
 - **VideoAgent Service (8003)**: 유튜브 영상 처리
 
 ## 🛠️ 설치 및 실행
@@ -37,8 +37,8 @@ python run_services.py
 # Intent Service (8001)
 cd intent_service && python server.py
 
-# ShoppingAgent Service (8002)
-cd shopping_service && python server.py
+# TextAgent Service (8002)
+cd text_service && python server.py
 
 # VideoAgent Service (8003)
 cd video_service && python server.py
@@ -99,7 +99,7 @@ cooking-agent/
 - `POST /classify`: 의도 분류
 - `GET /health`: 서비스 상태 확인
 
-#### ShoppingAgent Service (8002)
+#### TextAgent Service (8002)
 - `POST /chat`: 요리 관련 메시지 처리
 - `GET /health`: 서비스 상태 확인
 

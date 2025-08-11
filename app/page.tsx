@@ -12,6 +12,7 @@ import { sendMessageToAgent, checkServiceHealth } from "@/lib/api"
 interface ChatMessage {
   type: "user" | "bot"
   content: string
+  recipes?: Recipe[]
   timestamp: Date
 }
 
@@ -22,11 +23,17 @@ interface ServiceHealth {
   agent: boolean
 }
 
+interface Ingredient {
+  amount: string;
+  item: string;
+  unit?: string;
+}
+
 interface Recipe {
   food_name: string
-  ingredients: string[]
+  ingredients: (string | Ingredient)[]
   recipe: string[]
-  answer?: string // 'answer' 필드가 있을 수 있음
+  answer?: string
 }
 
 export default function CookingAgent() {
@@ -81,17 +88,19 @@ export default function CookingAgent() {
         const botResponse = result.response;
         console.log('----에이전트에게 보낸 메시지 응답 결과 ----- Bot response:', botResponse)
 
+        // botResponse.recipes가 배열이 아니거나 없으면 빈 배열로 처리하여 에러 방지
+        const recipes = Array.isArray(botResponse.recipes) ? botResponse.recipes : [];
+
         // 봇 응답 추가
         const botChatMessage: ChatMessage = {
           type: "bot",
           content: botResponse.answer || "레시피 정보를 확인해주세요.",
+          recipes: recipes,
           timestamp: new Date()
         }
         setChatHistory(prev => [...prev, botChatMessage])
 
-        // recipes 상태를 봇이 전달해준 recipes 배열로 업데이트
-        // botResponse.recipes가 배열이 아니거나 없으면 빈 배열로 처리하여 에러 방지
-        setRecipes(Array.isArray(botResponse.recipes) ? botResponse.recipes : []);
+        setRecipes(recipes);
 
       } catch (error : any) {
         console.error('Error processing message:', error.message || error);
@@ -247,7 +256,46 @@ export default function CookingAgent() {
                       }`}
                     >
                       <div className="whitespace-pre-wrap">{chat.content}</div>
-                      <div className="text-xs text-gray-500 mt-2">
+                      {chat.type === 'bot' && chat.recipes && chat.recipes.length > 0 && (
+                        <div className="mt-4 space-y-4">
+                          {chat.recipes.map((recipe, recipeIndex) => (
+                            <div key={recipeIndex} className="border-t border-orange-200/50 pt-3 space-y-3">
+                              <h4 className="font-bold text-orange-800 flex items-center text-lg">
+                                <BookOpen className="w-5 h-5 mr-2 flex-shrink-0" />
+                                {recipe.food_name}
+                              </h4>
+                              <div>
+                                <h5 className="font-semibold text-md mb-2 text-orange-700 flex items-center">
+                                  <ShoppingCart className="w-4 h-4 mr-2" />재료 목록
+                                </h5>
+                                <div className="space-y-1 text-sm">
+                                  {recipe.ingredients.map((ingredient, i) => (
+                                    <div key={i} className="bg-orange-50/50 p-2 rounded-md border border-orange-100/80">
+                                      {typeof ingredient === 'string'
+                                        ? ingredient
+                                        : `${ingredient.item} ${ingredient.amount}`}
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                              <div>
+                                <h5 className="font-semibold text-md mb-2 text-orange-700 flex items-center">
+                                  <BookOpen className="w-4 h-4 mr-2" />조리법
+                                </h5>
+                                <div className="space-y-2 text-sm">
+                                  {recipe.recipe.map((step, i) => (
+                                    <div key={i} className="p-2 rounded-md border border-red-100/80 bg-red-50/50 leading-relaxed">
+                                      <span className="font-bold text-orange-700">{i + 1}. </span>
+                                      {step.replace(/^\d+\.\s*/, '')}
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      <div className="text-xs text-gray-500 mt-2 text-right">
                         {chat.timestamp.toLocaleTimeString()}
                       </div>
                     </div>
@@ -310,7 +358,9 @@ export default function CookingAgent() {
                                         <div className="space-y-2">
                                             {recipe.ingredients.map((ingredient, i) => (
                                                 <div key={i} className="bg-gradient-to-br from-orange-50 to-red-50 rounded-lg p-2 border border-orange-200 text-sm">
-                                                    {ingredient}
+                                                    {typeof ingredient === 'string'
+                                                        ? ingredient
+                                                        : `${ingredient.item} ${ingredient.amount}`}
                                                 </div>
                                             ))}
                                         </div>
