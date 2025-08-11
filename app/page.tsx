@@ -24,16 +24,16 @@ interface ServiceHealth {
 }
 
 interface Ingredient {
-  amount: string;
-  item: string;
-  unit?: string;
+  item: string
+  amount: string
+  unit: string
 }
 
 interface Recipe {
+  source: 'text' | 'video'
   food_name: string
-  ingredients: (string | Ingredient)[]
+  ingredients: Ingredient[]
   recipe: string[]
-  answer?: string
 }
 
 export default function CookingAgent() {
@@ -271,9 +271,7 @@ export default function CookingAgent() {
                                 <div className="space-y-1 text-sm">
                                   {recipe.ingredients.map((ingredient, i) => (
                                     <div key={i} className="bg-orange-50/50 p-2 rounded-md border border-orange-100/80">
-                                      {typeof ingredient === 'string'
-                                        ? ingredient
-                                        : `${ingredient.item} ${ingredient.amount}`}
+                                      {`${ingredient.item} ${ingredient.amount}${ingredient.unit ? ' ' + ingredient.unit : ''}`.trim()}
                                     </div>
                                   ))}
                                 </div>
@@ -358,9 +356,7 @@ export default function CookingAgent() {
                                         <div className="space-y-2">
                                             {recipe.ingredients.map((ingredient, i) => (
                                                 <div key={i} className="bg-gradient-to-br from-orange-50 to-red-50 rounded-lg p-2 border border-orange-200 text-sm">
-                                                    {typeof ingredient === 'string'
-                                                        ? ingredient
-                                                        : `${ingredient.item} ${ingredient.amount}`}
+                                                    {`${ingredient.item} ${ingredient.amount}${ingredient.unit ? ' ' + ingredient.unit : ''}`.trim()}
                                                 </div>
                                             ))}
                                         </div>

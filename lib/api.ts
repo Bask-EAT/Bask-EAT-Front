@@ -14,26 +14,26 @@ export interface IntentResponse {
   video_result?: any
 }
 
-export interface Ingredient {
-  name: string
+export interface StructuredIngredient {
+  item: string
   amount: string
-  unit?: string
+  unit: string
 }
 
-export interface ShoppingResponse {
-  answer: string
-  ingredients: (string | Ingredient)[]
+export interface UnifiedRecipe {
+  source: 'text' | 'video'
+  food_name: string
+  ingredients: StructuredIngredient[]
   recipe: string[]
 }
 
-export interface VideoResponse {
+export interface UnifiedAgentPayload {
   answer: string
-  ingredients: (string | Ingredient)[]
-  recipe: string[]
+  recipes: UnifiedRecipe[]
 }
 
 export interface AgentResponse {
-  response: string;
+  response: UnifiedAgentPayload;
 }
 
 // 의도 분류 API
