@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Separator } from "@/components/ui/separator"
 import { ArrowUp, ChefHat, BookOpen, ShoppingCart, Play, Search, MessageSquare, Loader2, AlertCircle } from "lucide-react"
-import { sendMessageToAgent, checkServiceHealth } from "@/lib/api"
+import { sendMessageAndPoll, checkServiceHealth } from "@/lib/api"
 
 interface ChatMessage {
   type: "user" | "bot"
@@ -82,10 +82,10 @@ export default function CookingAgent() {
       setChatHistory(prev => [...prev, userChatMessage])
 
       try {
-        const result = await sendMessageToAgent(userMessage)
+        const result = await sendMessageAndPoll(userMessage)
         // console.log('----indent 결과 ----- Intent classification result:', result)
 
-        const botResponse = result.response;
+        const botResponse = result;
         console.log('----에이전트에게 보낸 메시지 응답 결과 ----- Bot response:', botResponse)
 
         // botResponse.recipes가 배열이 아니거나 없으면 빈 배열로 처리하여 에러 방지
