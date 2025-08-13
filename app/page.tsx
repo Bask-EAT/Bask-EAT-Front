@@ -88,9 +88,6 @@ export default function CookingAgent() {
         const botResponse = result;
         console.log('----에이전트에게 보낸 메시지 응답 결과 ----- Bot response:', botResponse)
 
-        // botResponse.recipes가 배열이 아니거나 없으면 빈 배열로 처리하여 에러 방지
-        // const recipes = Array.isArray(botResponse.recipes) ? botResponse.recipes : [];
-        // ✨ 여기가 핵심 수정 포인트입니다! ✨
         // 백엔드에서 온 데이터를 프론트엔드 형식에 맞게 변환(정제)합니다.
         const cleanedRecipes = (botResponse.recipes || []).map((rawRecipe: any) => {
           // 1. 불필요한 포장 풀기 (Unwrapping)
@@ -115,27 +112,52 @@ export default function CookingAgent() {
         }).filter(Boolean); // 혹시 모를 null/undefined 값 제거
 
 
-
         // 봇 응답 추가
         const botChatMessage: ChatMessage = {
           type: "bot",
           content: botResponse.answer || "레시피 정보를 확인해주세요.",
-          // recipes: recipes,
-          recipes: cleanedRecipes, // 정제된 레시피 데이터를 사용합니다.
+          recipes: cleanedRecipes,
           timestamp: new Date()
         }
         setChatHistory(prev => [...prev, botChatMessage])
-
-        // setRecipes(recipes);
-        setRecipes(cleanedRecipes); // 정제된 레시피 데이터를 상태에 저장합니다.
+        setRecipes(cleanedRecipes);
 
       } catch (error : any) {
-        console.error('Error processing message:', error.message || error);
-        setChatHistory(prev => [...prev, {
-          type: "bot",
-          content: "죄송합니다. 서버에서 응답을 처리하지 못했습니다.",
-          timestamp: new Date()
-        }])
+        let displayMessage = "죄송합니다. 서버에서 응답을 처리하지 못했습니다.";
+
+      if (error && error.message) {
+        // 정규표현식 대신, 에러 메시지에서 JSON 부분을 직접 파싱하는 더 안정적인 방법을 사용합니다.
+        try {
+          // 1. 에러 메시지에서 JSON 객체가 시작하는 '{' 문자를 찾습니다.
+          const jsonStartIndex = error.message.indexOf('{');
+          
+          if (jsonStartIndex > -1) {
+            // 2. '{' 부터 끝까지 문자열을 잘라내어 순수한 JSON 텍스트를 얻습니다.
+            const jsonString = error.message.substring(jsonStartIndex);
+            
+            // 3. 추출한 문자열을 JSON 객체로 변환(파싱)합니다.
+            const errorData = JSON.parse(jsonString);
+            
+            // 4. 파싱된 객체 안에 'detail' 키가 있으면 그 값을 최종 메시지로 사용합니다.
+            if (errorData && errorData.detail) {
+              displayMessage = errorData.detail;
+            }
+          }
+        } catch (parseError) {
+          // 에러 메시지에 JSON이 포함되지 않았거나 파싱에 실패한 경우,
+          // 아무것도 하지 않고 기본 에러 메시지를 사용합니다.
+          console.error("Could not parse error JSON from message:", parseError);
+        }
+      }
+      
+      console.error('Error processing message:', error.message || error);
+
+      // 5. 최종적으로 결정된 메시지를 채팅창에 보여줍니다.
+      setChatHistory(prev => [...prev, {
+        type: "bot",
+        content: displayMessage,
+        timestamp: new Date()
+      }]);
       } finally {
         setIsLoading(false)
       }
