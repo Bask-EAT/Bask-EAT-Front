@@ -89,18 +89,45 @@ export default function CookingAgent() {
         console.log('----에이전트에게 보낸 메시지 응답 결과 ----- Bot response:', botResponse)
 
         // botResponse.recipes가 배열이 아니거나 없으면 빈 배열로 처리하여 에러 방지
-        const recipes = Array.isArray(botResponse.recipes) ? botResponse.recipes : [];
+        // const recipes = Array.isArray(botResponse.recipes) ? botResponse.recipes : [];
+        // ✨ 여기가 핵심 수정 포인트입니다! ✨
+        // 백엔드에서 온 데이터를 프론트엔드 형식에 맞게 변환(정제)합니다.
+        const cleanedRecipes = (botResponse.recipes || []).map((rawRecipe: any) => {
+          // 1. 불필요한 포장 풀기 (Unwrapping)
+          // 'text_based_...' 또는 'extract_recipe_...' 키가 있으면 그 안의 값을 사용합니다.
+          const recipeData = rawRecipe.text_based_cooking_assistant_response || rawRecipe.extract_recipe_from_youtube_response || rawRecipe;
+
+          // 2. 재료 데이터 형식 맞추기 (string[] -> Ingredient[])
+          const ingredients = (recipeData.ingredients || []).map((ing: any) => {
+            if (typeof ing === 'string') {
+              // 문자열이면 객체로 변환
+              return { item: ing, amount: '', unit: '' };
+            }
+            // 이미 객체 형식이면 그대로 반환
+            return ing;
+          });
+
+          return {
+            ...recipeData,
+            ingredients: ingredients,
+            source: recipeData.source || 'text' // source가 없을 경우 기본값 설정
+          };
+        }).filter(Boolean); // 혹시 모를 null/undefined 값 제거
+
+
 
         // 봇 응답 추가
         const botChatMessage: ChatMessage = {
           type: "bot",
           content: botResponse.answer || "레시피 정보를 확인해주세요.",
-          recipes: recipes,
+          // recipes: recipes,
+          recipes: cleanedRecipes, // 정제된 레시피 데이터를 사용합니다.
           timestamp: new Date()
         }
         setChatHistory(prev => [...prev, botChatMessage])
 
-        setRecipes(recipes);
+        // setRecipes(recipes);
+        setRecipes(cleanedRecipes); // 정제된 레시피 데이터를 상태에 저장합니다.
 
       } catch (error : any) {
         console.error('Error processing message:', error.message || error);
