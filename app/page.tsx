@@ -111,6 +111,35 @@ export default function CookingAgent() {
         //     // 이미 객체 형식이면 그대로 반환
         //     return ing;
         //   });
+        const cleanedRecipes = (botResponse.recipes || [])
+          .map((rawRecipe: any) => {
+            // 0) 문자열이면 JSON 파싱 시도
+            const tryParse = (val: any) => {
+              if (typeof val === 'string') {
+                const s = val.trim();
+                if (s.startsWith('{') || s.startsWith('[')) {
+                  try { return JSON.parse(s); } catch { /* ignore */ }
+                }
+                return val; // 순수 텍스트로 유지
+              }
+              return val;
+            };
+
+            // 1) 불필요한 포장 풀기
+            let recipeData = rawRecipe.text_based_cooking_assistant_response || rawRecipe.extract_recipe_from_youtube_response || rawRecipe;
+            recipeData = tryParse(recipeData);
+
+            // 2) steps -> recipe 정규화
+            const recipeSteps: string[] = Array.isArray((recipeData as any)?.recipe)
+              ? recipeData.recipe
+              : (Array.isArray((recipeData as any)?.steps) ? (recipeData as any).steps : []);
+
+            // 3) 재료 정규화 (string[] -> Ingredient[])
+            const normalizedIngredients: Ingredient[] = Array.isArray((recipeData as any)?.ingredients)
+              ? (recipeData as any).ingredients.map((ing: any) => (
+                  typeof ing === 'string' ? { item: ing, amount: '', unit: '' } : ing
+                ))
+              : [];
 
         //   return {
         //     ...recipeData,
@@ -119,6 +148,39 @@ export default function CookingAgent() {
         //   };
         // }).filter(Boolean); // 혹시 모를 null/undefined 값 제거
 
+            return {
+              source: (recipeData as any).source || 'text',
+              food_name: (recipeData as any).food_name || (recipeData as any).title || '',
+              ingredients: normalizedIngredients,
+              recipe: recipeSteps,
+            } as Recipe;
+          })
+          // 레시피 카드 조건: 단계가 1개 이상 있어야 함
+          .filter((r: Recipe) => Array.isArray(r.recipe) && r.recipe.length > 0);
+
+
+        // 답변 텍스트 구성: 상위 answer + 레시피 아닌 하위 answer들을 결합
+        const nestedAnswers: string[] = (botResponse.recipes || [])
+          .map((rawRecipe: any) => {
+            const unwrap = rawRecipe.text_based_cooking_assistant_response || rawRecipe.extract_recipe_from_youtube_response || rawRecipe;
+            if (typeof unwrap === 'string') {
+              const s = unwrap.trim();
+              if (s.startsWith('{') || s.startsWith('[')) {
+                try { const obj = JSON.parse(s); return obj?.answer; } catch { return undefined; }
+              }
+              return s; // 순수 텍스트 응답
+            }
+            return unwrap?.answer;
+          })
+          .filter((a: any) => typeof a === 'string' && a.trim().length > 0);
+
+        // 상위 answer + 하위 answer를 모두 결합하되, 중복은 제거
+        const topAnswer = typeof botResponse.answer === 'string' ? botResponse.answer.trim() : '';
+        const allAnswers = [topAnswer, ...nestedAnswers]
+          .map((s) => (typeof s === 'string' ? s.trim() : ''))
+          .filter((s) => s.length > 0);
+        const uniqueAnswers = allAnswers.filter((s, idx, arr) => arr.findIndex(t => t === s) === idx);
+        const combinedAnswer = uniqueAnswers.join('\n\n');
 
         // 봇 응답 추가
         const botChatMessage: ChatMessage = {
