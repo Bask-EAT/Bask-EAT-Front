@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Separator } from "@/components/ui/separator"
-import { ArrowUp, ChefHat, BookOpen, ShoppingCart, Play, Search, MessageSquare, Loader2, AlertCircle } from "lucide-react"
+import { ArrowUp, ChefHat, BookOpen, ShoppingCart, Play, Search, MessageSquare, Loader2, ExternalLink } from "lucide-react"
 import { sendMessageAndPoll, checkServiceHealth } from "@/lib/api"
 
 interface ChatMessage {
@@ -14,6 +14,7 @@ interface ChatMessage {
   content: string
   recipes?: Recipe[]
   timestamp: Date
+  chatType?: 'chat' | 'cart'
 }
 
 interface ServiceHealth {
@@ -29,10 +30,17 @@ interface Ingredient {
   unit: string
 }
 
+interface Product {
+  product_name: string
+  price: number
+  image_url: string
+  product_address: string
+}
+
 interface Recipe {
-  source: 'text' | 'video'
+  source: 'text' | 'video' | 'ingredient_search'
   food_name: string
-  ingredients: Ingredient[]
+  ingredients: (Ingredient | Product)[]
   recipe: string[]
 }
 
@@ -40,8 +48,6 @@ export default function CookingAgent() {
   const [message, setMessage] = useState("")
   const [chatHistory, setChatHistory] = useState<ChatMessage[]>([])
   const [isLoading, setIsLoading] = useState(false)
-  // const [currentIngredients, setCurrentIngredients] = useState<(string | Ingredient)[]>([])
-  // const [currentRecipe, setCurrentRecipe] = useState<string[]>([])
   const [serviceHealth, setServiceHealth] = useState<ServiceHealth>({
     intent: false,
     shopping: false,
@@ -49,7 +55,6 @@ export default function CookingAgent() {
     agent : false
   })
   const [isAgentHealthy, setIsAgentHealthy] = useState(false)
-  // const [currentRecipeName, setCurrentRecipeName] = useState<string>("")
   const [recipes, setRecipes] = useState<Recipe[]>([])
 
 
@@ -58,6 +63,8 @@ export default function CookingAgent() {
     handleRefreshHealth();
   }, [])
 
+
+  // 에이전트 상태 확인
   const handleRefreshHealth = async () => {
     try {
       const health = await checkServiceHealth();
@@ -68,6 +75,8 @@ export default function CookingAgent() {
     }
   }
 
+
+  // 메시지 전송 및 응답 처리
   const handleSendMessage = async () => {
     if (message.trim() && !isLoading) {
       const userMessage = message.trim()
@@ -83,72 +92,72 @@ export default function CookingAgent() {
 
       try {
         const result = await sendMessageAndPoll(userMessage)
-        // console.log('----indent 결과 ----- Intent classification result:', result)
 
         const botResponse = result;
         console.log('----에이전트에게 보낸 메시지 응답 결과 ----- Bot response:', botResponse)
 
         // 백엔드에서 온 데이터를 프론트엔드 형식에 맞게 변환(정제)합니다.
-        const cleanedRecipes = (botResponse.recipes || []).map((rawRecipe: any) => {
-          // 1. 불필요한 포장 풀기 (Unwrapping)
-          // 'text_based_...' 또는 'extract_recipe_...' 키가 있으면 그 안의 값을 사용합니다.
-          const recipeData = rawRecipe.text_based_cooking_assistant_response || rawRecipe.extract_recipe_from_youtube_response || rawRecipe;
+        // const cleanedRecipes = (botResponse.recipes || []).map((rawRecipe: any) => {
+        //   // 1. 불필요한 포장 풀기 (Unwrapping)
+        //   // 'text_based_...' 또는 'extract_recipe_...' 키가 있으면 그 안의 값을 사용합니다.
+        //   const recipeData = rawRecipe.text_based_cooking_assistant_response || rawRecipe.extract_recipe_from_youtube_response || rawRecipe;
 
-          // 2. 재료 데이터 형식 맞추기 (string[] -> Ingredient[])
-          const ingredients = (recipeData.ingredients || []).map((ing: any) => {
-            if (typeof ing === 'string') {
-              // 문자열이면 객체로 변환
-              return { item: ing, amount: '', unit: '' };
-            }
-            // 이미 객체 형식이면 그대로 반환
-            return ing;
-          });
+        //   // 2. 재료 데이터 형식 맞추기 (string[] -> Ingredient[])
+        //   const ingredients = (recipeData.ingredients || []).map((ing: any) => {
+        //     if (typeof ing === 'string') {
+        //       // 문자열이면 객체로 변환
+        //       return { item: ing, amount: '', unit: '' };
+        //     }
+        //     // 이미 객체 형식이면 그대로 반환
+        //     return ing;
+        //   });
 
-          return {
-            ...recipeData,
-            ingredients: ingredients,
-            source: recipeData.source || 'text' // source가 없을 경우 기본값 설정
-          };
-        }).filter(Boolean); // 혹시 모를 null/undefined 값 제거
+        //   return {
+        //     ...recipeData,
+        //     ingredients: ingredients,
+        //     source: recipeData.source || 'text' // source가 없을 경우 기본값 설정
+        //   };
+        // }).filter(Boolean); // 혹시 모를 null/undefined 값 제거
 
 
         // 봇 응답 추가
         const botChatMessage: ChatMessage = {
           type: "bot",
           content: botResponse.answer || "레시피 정보를 확인해주세요.",
-          recipes: cleanedRecipes,
-          timestamp: new Date()
+          recipes: botResponse.recipes || [],
+          timestamp: new Date(),
+          chatType: botResponse.chatType || 'chat'
         }
         setChatHistory(prev => [...prev, botChatMessage])
-        setRecipes(cleanedRecipes);
+        setRecipes(botResponse.recipes || []);
 
       } catch (error : any) {
         let displayMessage = "죄송합니다. 서버에서 응답을 처리하지 못했습니다.";
 
-      if (error && error.message) {
-        // 정규표현식 대신, 에러 메시지에서 JSON 부분을 직접 파싱하는 더 안정적인 방법을 사용합니다.
-        try {
-          // 1. 에러 메시지에서 JSON 객체가 시작하는 '{' 문자를 찾습니다.
-          const jsonStartIndex = error.message.indexOf('{');
-          
-          if (jsonStartIndex > -1) {
-            // 2. '{' 부터 끝까지 문자열을 잘라내어 순수한 JSON 텍스트를 얻습니다.
-            const jsonString = error.message.substring(jsonStartIndex);
+        if (error && error.message) {
+          // 에러 메시지에서 JSON 부분을 직접 파싱
+          try {
+            // 1. 에러 메시지에서 JSON 객체가 시작하는 '{' 문자를 찾습니다.
+            const jsonStartIndex = error.message.indexOf('{');
             
-            // 3. 추출한 문자열을 JSON 객체로 변환(파싱)합니다.
-            const errorData = JSON.parse(jsonString);
-            
-            // 4. 파싱된 객체 안에 'detail' 키가 있으면 그 값을 최종 메시지로 사용합니다.
-            if (errorData && errorData.detail) {
-              displayMessage = errorData.detail;
+            if (jsonStartIndex > -1) {
+              // 2. '{' 부터 끝까지 문자열을 잘라내어 순수한 JSON 텍스트를 얻습니다.
+              const jsonString = error.message.substring(jsonStartIndex);
+              
+              // 3. 추출한 문자열을 JSON 객체로 변환(파싱)합니다.
+              const errorData = JSON.parse(jsonString);
+              
+              // 4. 파싱된 객체 안에 'detail' 키가 있으면 그 값을 최종 메시지로 사용합니다.
+              if (errorData && errorData.detail) {
+                displayMessage = errorData.detail;
+              }
             }
+          } catch (parseError) {
+            // 에러 메시지에 JSON이 포함되지 않았거나 파싱에 실패한 경우,
+            // 아무것도 하지 않고 기본 에러 메시지를 사용합니다.
+            console.error("Could not parse error JSON from message:", parseError);
           }
-        } catch (parseError) {
-          // 에러 메시지에 JSON이 포함되지 않았거나 파싱에 실패한 경우,
-          // 아무것도 하지 않고 기본 에러 메시지를 사용합니다.
-          console.error("Could not parse error JSON from message:", parseError);
         }
-      }
       
       console.error('Error processing message:', error.message || error);
 
@@ -173,10 +182,75 @@ export default function CookingAgent() {
 
   const handleNewChat = () => {
     setChatHistory([])
-    // setCurrentIngredients([])
-    // setCurrentRecipe([])
+
     setRecipes([])
   }
+
+
+  // --- 렌더링 함수 분리 ---
+  // 1. 요리 레시피 렌더링 컴포넌트
+  const renderCookingRecipe = (recipe: Recipe, recipeIndex: number) => (
+    <div key={recipeIndex} className="border-t border-orange-200/50 pt-3 space-y-3">
+      <h4 className="font-bold text-orange-800 flex items-center text-lg">
+        <BookOpen className="w-5 h-5 mr-2 flex-shrink-0" />
+        {recipe.food_name}
+      </h4>
+      <div>
+        <h5 className="font-semibold text-md mb-2 text-orange-700 flex items-center">
+          <ShoppingCart className="w-4 h-4 mr-2" />재료 목록
+        </h5>
+        <div className="space-y-1 text-sm">
+          {recipe.ingredients.map((ingredient, i) => (
+            <div key={i} className="bg-orange-50/50 p-2 rounded-md border border-orange-100/80">
+              {`${(ingredient as Ingredient).item} ${(ingredient as Ingredient).amount}${(ingredient as Ingredient).unit ? ' ' + (ingredient as Ingredient).unit : ''}`.trim()}
+            </div>
+          ))}
+        </div>
+      </div>
+      {recipe.recipe && recipe.recipe.length > 0 && (
+        <div>
+          <h5 className="font-semibold text-md mb-2 text-orange-700 flex items-center">
+            <BookOpen className="w-4 h-4 mr-2" />조리법
+          </h5>
+          <div className="space-y-2 text-sm">
+            {recipe.recipe.map((step, i) => (
+              <div key={i} className="p-2 rounded-md border border-red-100/80 bg-red-50/50 leading-relaxed">
+                <span className="font-bold text-orange-700">{i + 1}. </span>
+                {step.replace(/^\d+\.\s*/, '')}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+
+  // 2. 상품 검색 결과 렌더링 컴포넌트
+  const renderProductResults = (recipe: Recipe, recipeIndex: number) => (
+    <div key={recipeIndex} className="border-t border-blue-200/50 pt-3 space-y-3">
+      <h4 className="font-bold text-blue-800 flex items-center text-lg">
+        <Search className="w-5 h-5 mr-2 flex-shrink-0" />
+        '{recipe.food_name}' 검색 결과
+      </h4>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        {recipe.ingredients.map((product, i) => (
+          <a key={i} href={(product as Product).product_address} target="_blank" rel="noopener noreferrer" className="block bg-blue-50/50 p-3 rounded-lg border border-blue-100/80 hover:bg-blue-100 hover:border-blue-200 transition-all duration-200">
+            <div className="flex items-center gap-3">
+              <img src={(product as Product).image_url} alt={(product as Product).product_name} className="w-16 h-16 rounded-md object-cover border border-blue-200" />
+              <div className="flex-1">
+                <p className="font-semibold text-sm text-blue-900 leading-tight">{(product as Product).product_name}</p>
+                <p className="text-blue-700 font-bold mt-1">{(product as Product).price.toLocaleString()}원</p>
+              </div>
+              <ExternalLink className="w-4 h-4 text-blue-400" />
+            </div>
+          </a>
+        ))}
+      </div>
+    </div>
+  );
+
+
+
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-orange-50 to-red-50 p-6">
@@ -280,7 +354,6 @@ export default function CookingAgent() {
 
         {/* 중앙 메인 영역 */}
         <div className="col-span-7 bg-white/95 backdrop-blur-sm rounded-xl shadow-xl border border-orange-100 flex flex-col">
-          {/* 채팅 영역 */}
           <div className="flex-1 p-4">
             <ScrollArea className="h-full">
               {chatHistory?.length === 0 ? (
@@ -288,9 +361,6 @@ export default function CookingAgent() {
                   <div className="text-center text-orange-400">
                     <ChefHat className="w-16 h-16 mx-auto mb-4 opacity-50" />
                     <p className="text-lg">요리 전문 AI와 대화를 시작해보세요!</p>
-                    <p className="text-sm mt-2 text-gray-500">
-                      레시피, 재료, 조리법 등 무엇이든 물어보세요
-                    </p>
                   </div>
                 </div>
               ) : (
@@ -307,39 +377,15 @@ export default function CookingAgent() {
                       <div className="whitespace-pre-wrap">{chat.content}</div>
                       {chat.type === 'bot' && chat.recipes && chat.recipes.length > 0 && (
                         <div className="mt-4 space-y-4">
-                          {chat.recipes.map((recipe, recipeIndex) => (
-                            <div key={recipeIndex} className="border-t border-orange-200/50 pt-3 space-y-3">
-                              <h4 className="font-bold text-orange-800 flex items-center text-lg">
-                                <BookOpen className="w-5 h-5 mr-2 flex-shrink-0" />
-                                {recipe.food_name}
-                              </h4>
-                              <div>
-                                <h5 className="font-semibold text-md mb-2 text-orange-700 flex items-center">
-                                  <ShoppingCart className="w-4 h-4 mr-2" />재료 목록
-                                </h5>
-                                <div className="space-y-1 text-sm">
-                                  {recipe.ingredients.map((ingredient, i) => (
-                                    <div key={i} className="bg-orange-50/50 p-2 rounded-md border border-orange-100/80">
-                                      {`${ingredient.item} ${ingredient.amount}${ingredient.unit ? ' ' + ingredient.unit : ''}`.trim()}
-                                    </div>
-                                  ))}
-                                </div>
-                              </div>
-                              <div>
-                                <h5 className="font-semibold text-md mb-2 text-orange-700 flex items-center">
-                                  <BookOpen className="w-4 h-4 mr-2" />조리법
-                                </h5>
-                                <div className="space-y-2 text-sm">
-                                  {recipe.recipe.map((step, i) => (
-                                    <div key={i} className="p-2 rounded-md border border-red-100/80 bg-red-50/50 leading-relaxed">
-                                      <span className="font-bold text-orange-700">{i + 1}. </span>
-                                      {step.replace(/^\d+\.\s*/, '')}
-                                    </div>
-                                  ))}
-                                </div>
-                              </div>
-                            </div>
-                          ))}
+                          {chat.recipes.map((recipe, recipeIndex) => {
+                            // --- 핵심! ---
+                            // source 값에 따라 다른 렌더링 함수를 호출합니다.
+                            if (recipe.source === 'ingredient_search') {
+                              return renderProductResults(recipe, recipeIndex);
+                            } else {
+                              return renderCookingRecipe(recipe, recipeIndex);
+                            }
+                          })}
                         </div>
                       )}
                       <div className="text-xs text-gray-500 mt-2 text-right">
@@ -351,7 +397,7 @@ export default function CookingAgent() {
                     <div className="bg-gradient-to-r from-gray-50 to-orange-50 border border-gray-200 mr-auto max-w-[80%] p-4 rounded-lg">
                       <div className="flex items-center space-x-2">
                         <Loader2 className="w-4 h-4 animate-spin" />
-                        <span className="text-sm text-gray-600">AI가 답변을 생각하고 있습니다...</span>
+                        <span>AI가 답변을 생각하고 있습니다...</span>
                       </div>
                     </div>
                   )}
