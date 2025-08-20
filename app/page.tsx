@@ -13,6 +13,8 @@ import { WelcomeScreen } from "@/components/main/welcome-screen"
 import { RecipeExplorationScreen } from "@/components/main/recipe-exploration-screen"
 import { ShoppingListScreen } from "@/components/main/shopping-list-screen"
 
+     
+
 interface ChatMessage {
   type: "user" | "bot"
   content: string
