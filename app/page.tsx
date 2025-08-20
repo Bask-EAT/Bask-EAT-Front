@@ -18,7 +18,7 @@ interface ChatMessage {
   content: string
   recipes?: Recipe[]
   timestamp: Date
-  chatType?: 'chat' | 'cart'
+  chatType?: 'chat' | 'cart' | 'video'
 }
 
 
