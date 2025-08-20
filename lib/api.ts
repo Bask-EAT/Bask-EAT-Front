@@ -7,6 +7,8 @@ const AGENT_SERVICE_URL = "/api/agent";
 
 // API 응답 타입 정의
 export interface IntentResponse {
+
+  
   intent: string
   confidence: number
   reason: string
