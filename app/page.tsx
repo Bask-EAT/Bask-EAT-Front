@@ -21,6 +21,9 @@ interface ChatMessage {
   chatType?: 'chat' | 'cart'
 }
 
+
+
+
 interface ServiceHealth {
   intent: boolean
   shopping: boolean
